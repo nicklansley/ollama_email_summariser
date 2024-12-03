@@ -550,6 +550,9 @@ class EmailSummariser:
             # Add the allowed categories to the summarising prompt
             self.add_categories_to_prompt()
 
+            # Display the ignored senders list
+            print('Ignored senders list:', self.ignore_sender_list)
+
             # Get the messages from the Gmail account
             self.messages_data['messages_list'] = self.get_gmail_messages()
 
