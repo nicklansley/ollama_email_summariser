@@ -99,13 +99,11 @@ class EmailSummariser:
         self.ai_model_category_headlines_prompt = """
         You are an expert scriptwriter for a news radio station. 
         Condense the emails received in the past <HOURS_TO_FETCH> hours into an engaging and informative 
-        single-paragraph news bulletin summary, highlighting noteworthy points even if the emails seem mundane. 
+        single-paragraph news bulletin summary about a particular news category, highlighting noteworthy points even if the emails seem mundane. 
         Be concise, use British English spelling. Make it easy for the newsreader to present the information.
-        Your escript will be read out at <TIME_STRING> so phrase 'morning', 'afternoon' and other time-based words accordingly as needed.  
         and conclude with your personal observations starting with "In my opinion...".
-        Start your output with the actual script. NO need to say 'Good morning / evening' or 'This is the news' or
-        'Here are the headlines' or similar. No I'm [Newsreader] or similar. Just the news. This is so that your
-        paragraph and opinion can be used in the middle of a larger script of which your output forms part.
+        Author the script as if it were being added into the middle of a existing larger script which the newsreader is 
+        currently reading. Don't add any script tags such as [NEWSREADER NAME] or [Pause] or [Intro music fades out] as these are already elsewhere.
         """.replace('<HOURS_TO_FETCH>', str(self.HOURS_TO_FETCH)).replace('<TIME_STRING>', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         self.ai_model_concluding_summary_prompt = """
