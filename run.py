@@ -8,7 +8,7 @@ import re
 import smtplib
 
 from dotenv import load_dotenv
-import ollama
+from ollama import Client
 
 load_dotenv()
 
@@ -17,6 +17,15 @@ allowed_categories_list = [
     'LGBTQ+', 'LEGAL', 'NEWS', 'PERSONAL', 'PROMOTIONAL', 'RELIGION', 'SCIENCE', 'SHOPPING', 'SOCIAL', 'SPORT',
     'TECHNOLOGY', 'TRAVEL', 'WORK'
 ]
+
+
+def get_ollama_client():
+    client = Client(
+        host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+        headers={'x-nick-email': 'YAY!'}
+    )
+
+    return client
 
 
 def fetch_email_by_id(mail, email_id):
@@ -44,6 +53,7 @@ class EmailSummariser:
         self.ai_model_top_headlines_prompt = ""
         self.ai_model_combined_prompt = ""
         self.ai_model_convert_html_to_plain_text_prompt = ""
+        self.client = get_ollama_client()
         self.gmail_account_username = os.getenv("GMAIL_USERNAME")
         self.gmail_account_password = os.getenv("GMAIL_PASSWORD")
         self.INDIVIDUAL_EMAIL_SUMMARIES = os.getenv("INDIVIDUAL_EMAIL_SUMMARIES", "NO") == "YES"
@@ -93,8 +103,8 @@ class EmailSummariser:
         any bullet points or lists. Make it easy for the newsreader to present the information.
         Highlight any significant news. Your script will be read out at <TIME_STRING> so phrase 'morning', 'afternoon' and other time-based words accordingly as needed.  
         Conclude with your own observations on the messages, starting with "In my opinion..."."
-        """.replace('<HOURS_TO_FETCH>', str(self.HOURS_TO_FETCH)).replace('<TIME_STRING>', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
+        """.replace('<HOURS_TO_FETCH>', str(self.HOURS_TO_FETCH)).replace('<TIME_STRING>',
+                                                                          datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         self.ai_model_category_headlines_prompt = """
         You are an expert scriptwriter for a news radio station. 
@@ -104,7 +114,8 @@ class EmailSummariser:
         and conclude with your personal observations starting with "In my opinion...".
         Author the script as if it were being added into the middle of a existing larger script which the newsreader is 
         currently reading. Don't add any script tags such as [NEWSREADER NAME] or [Pause] or [Intro music fades out] as these are already elsewhere.
-        """.replace('<HOURS_TO_FETCH>', str(self.HOURS_TO_FETCH)).replace('<TIME_STRING>', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        """.replace('<HOURS_TO_FETCH>', str(self.HOURS_TO_FETCH)).replace('<TIME_STRING>',
+                                                                          datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         self.ai_model_concluding_summary_prompt = """
         You are an expert scriptwriter for a news radio station. 
@@ -323,7 +334,7 @@ class EmailSummariser:
         return plain_text, html
 
     def ai_summarise_email(self, email_content: str) -> str:
-        response = ollama.chat(
+        response = self.client.chat(
             model=self.summarising_ai_model,
             options={"num_ctx": self.NUM_CTX},
             messages=[
@@ -333,7 +344,7 @@ class EmailSummariser:
         return response['message']['content'].strip().replace('\n', '.')
 
     def call_ai_model(self, model, prompt, user_content):
-        response = ollama.chat(
+        response = self.client.chat(
             model=model, options={"num_ctx": self.NUM_CTX},
             messages=[
                 {'role': 'system', 'content': prompt},
@@ -436,11 +447,14 @@ class EmailSummariser:
 
             for category in revised_categories_list:
                 filtered_messages_list = [message for message in email_list if message["category"] == category]
-                if category not in self.messages_data.get('category_summary_dict', {}) or self.messages_data['category_summary_dict'][category] == '':
+                if category not in self.messages_data.get('category_summary_dict', {}) or \
+                        self.messages_data['category_summary_dict'][category] == '':
                     category_counter += 1
-                    print(f'Processing category: {category} ({category_counter} of {len(revised_categories_list)}) - {len(filtered_messages_list)} messages...')
+                    print(
+                        f'Processing category: {category} ({category_counter} of {len(revised_categories_list)}) - {len(filtered_messages_list)} messages...')
                     if len(filtered_messages_list) <= 10:
-                        self.messages_data['category_summary_dict'][category] = self.ai_author_category_headlines(filtered_messages_list)
+                        self.messages_data['category_summary_dict'][category] = self.ai_author_category_headlines(
+                            filtered_messages_list)
                         email_body += f'<hr>Category: {category} (from {len(filtered_messages_list)} messages)<br>'
                         email_body += self.messages_data['category_summary_dict'][category]
                     else:
@@ -450,9 +464,11 @@ class EmailSummariser:
                             batch_messages = filtered_messages_list[i:i + 10]
                             category_group_name = f'{category}-{group_counter}'
                             if f'{category}-{group_counter}' in self.messages_data['category_summary_dict']:
-                                self.messages_data['category_summary_dict'][category_group_name] += self.ai_author_category_headlines(batch_messages)
+                                self.messages_data['category_summary_dict'][
+                                    category_group_name] += self.ai_author_category_headlines(batch_messages)
                             else:
-                                self.messages_data['category_summary_dict'][category_group_name] = self.ai_author_category_headlines(batch_messages)
+                                self.messages_data['category_summary_dict'][
+                                    category_group_name] = self.ai_author_category_headlines(batch_messages)
 
                             email_body += f'<hr>Category: {category_group_name} (from {len(filtered_messages_list)} messages)<br>'
                             email_body += self.messages_data['category_summary_dict'][category_group_name]
@@ -511,11 +527,10 @@ class EmailSummariser:
         except Exception as e:
             print('Error sending summary email:', e)
 
-
     def wake_up_ai(self):
-        print('Waking up AI models...')
+        print('Waking up AI models on server', os.getenv("OLLAMA_HOST", "http://localhost:11434"))
         try:
-            response = ollama.chat(
+            response = self.client.chat(
                 model=self.summarising_ai_model,
                 messages=[
                     {'role': 'system',
@@ -525,7 +540,7 @@ class EmailSummariser:
 
             print(f'AI model "{self.summarising_ai_model}" is awake and says: {response["message"]["content"]}')
 
-            response = ollama.chat(
+            response = self.client.chat(
                 model=self.categorising_ai_model,
                 messages=[
                     {'role': 'system',
